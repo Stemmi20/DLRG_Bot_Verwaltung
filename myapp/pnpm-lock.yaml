@@ -105,6 +105,9 @@ importers:
       '@typescript-eslint/parser':
         specifier: ^8.9.0
         version: 8.9.0(eslint@9.12.0(jiti@1.21.6))(typescript@5.6.3)
+      '@unocss/core':
+        specifier: 0.63.4
+        version: 0.63.4
       '@unocss/svelte-scoped':
         specifier: ^0.63.4
         version: 0.63.4
