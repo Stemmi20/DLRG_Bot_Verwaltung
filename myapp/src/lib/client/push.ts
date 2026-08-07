@@ -1,5 +1,3 @@
-/** Push-An-/Abmeldung im Browser. Wird nur auf der Einstellungsseite gebraucht. */
-
 export type PushZustand = 'aus' | 'an' | 'blockiert' | 'nicht-unterstuetzt';
 
 export function pushUnterstuetzt(): boolean {
@@ -74,11 +72,6 @@ function geraetename(): string {
 	return `${system} · ${browser}`;
 }
 
-/**
- * Uint8Array.from() liefert ab TypeScript 5.7 ein Uint8Array<ArrayBufferLike>,
- * applicationServerKey verlangt aber garantiert einen ArrayBuffer. Deshalb den
- * Puffer explizit anlegen.
- */
 function base64ZuBytes(base64: string): Uint8Array<ArrayBuffer> {
 	const gefuellt = (base64 + '='.repeat((4 - (base64.length % 4)) % 4))
 		.replace(/-/g, '+')

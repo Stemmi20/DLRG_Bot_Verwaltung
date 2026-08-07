@@ -10,10 +10,6 @@ import type {
 	Zugehoerigkeit
 } from '$lib/types/lvs';
 
-/*
- * Deine bestehende Datenbankanbindung, ergänzt um den LVS-Teil.
- * Oben unverändert dein Original, ab "Dokumente" kommt das Neue dazu.
- */
 
 const client = new MongoClient(MONGODB_URI);
 
@@ -22,16 +18,11 @@ export function start_mongo() {
 	return client.connect();
 }
 
-/** Datenbank aus der Verbindungszeichenfolge. */
 export const datenbank: Db = client.db();
 
-/** Benannter Export – für `import { db } from '$lib/server/database'`. */
 export const db = datenbank;
 
-/** Default-Export – für `import DataBase from '$lib/server/database'`. */
 export default datenbank;
-
-// ---------------------------------------------------------------- Dokumente
 
 export interface PushSubscriptionDoc {
 	endpoint: string;

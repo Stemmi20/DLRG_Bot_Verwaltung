@@ -2,15 +2,17 @@
 // for information about these interfaces
 declare global {
 	namespace App {
-		// interface Error {}
 		interface Locals {
-			userId?: string;
-			telegramID?: number;
+			user: {
+				id: string;
+				vorname: string;
+				nachname: string;
+				ortsgruppe: string;
+				istAdmin: boolean;
+			} | null;
+			userId: string | null;
 		}
-		// interface PageData {}
-		// interface PageState {}
-		// interface Platform {}
 	}
 }
-
+ 
 export {};

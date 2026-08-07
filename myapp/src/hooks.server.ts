@@ -1,58 +1,41 @@
-import { redirect } from '@sveltejs/kit';
-import type { Handle } from '@sveltejs/kit';
-import { collection } from '$lib/server/usedata';
-import { indizesAnlegen } from '$lib/server/database';
-import { dev } from '$app/environment';
-import { col } from '$lib/server/database';
+// src/hooks.server.ts
+import { redirect, type Handle } from '@sveltejs/kit';
+import { sitzungPruefen } from '$lib/server/auth';
 
-const LOGIN_UEBERSPRINGEN = true;
-const DEMO_EMAIL = 'anna@beispiel.test';
-
-await indizesAnlegen();
+// Alles unter diesen Pfaden erfordert eine Anmeldung
+const GESCHUETZT = ['/boteinsatzgruppe', '/admin', '/alarm', '/board', '/einstellungen', '/kfausb'];
 
 export const handle: Handle = async ({ event, resolve }) => {
-	if (dev && LOGIN_UEBERSPRINGEN) {
-		const users = await col.users();
-		const user = (await users.findOne({ email: DEMO_EMAIL })) ?? (await users.findOne({}));
-		if (dev && LOGIN_UEBERSPRINGEN) {
-			const users = await col.users();
-			const user = (await users.findOne({ email: DEMO_EMAIL })) ?? (await users.findOne({}));
-			if (user) event.locals.userId = user._id.toHexString();
-			return resolve(event);
-		}
-		return resolve(event);
+	const sitzungsId = event.cookies.get('session');
+	const sitzung = sitzungsId ? await sitzungPruefen(sitzungsId) : null;
+
+	if (sitzungsId && !sitzung) {
+		event.cookies.delete('session', { path: '/' });
 	}
 
-	const token = event.cookies.get('token');
-	const pathname = event.url.pathname;
+	// Einzige Quelle der Wahrheit: was hier landet, kommt aus der Datenbank -
+	// nicht aus einem Cookie, das der Browser setzen koennte.
+	event.locals.user = sitzung
+		? {
+				id: sitzung.benutzer._id.toString(),
+				vorname: sitzung.benutzer.vorname ?? '',
+				nachname: sitzung.benutzer.nachname ?? '',
+				ortsgruppe: sitzung.benutzer.ortsgruppe ?? '',
+				istAdmin: sitzung.benutzer.ortsgruppe_admin === true
+			}
+		: null;
 
-	const publicRoutes = ['/login', '/api/login', '/api/logout'];
-	const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
+	event.locals.userId = event.locals.user?.id ?? null;
 
-	if (isPublicRoute) {
-		return resolve(event);
+	const pfad = event.url.pathname;
+	const brauchtAnmeldung = GESCHUETZT.some((p) => pfad === p || pfad.startsWith(p + '/'));
+
+	if (brauchtAnmeldung && !event.locals.user) {
+		redirect(303, `/login?weiter=${encodeURIComponent(pfad)}`);
 	}
 
-	if (!token) {
-		throw redirect(303, '/login');
-	}
-
-	try {
-		const user = await collection.findOne({ 'user.token': token } as any);
-
-		if (!user) {
-			event.cookies.delete('token', { path: '/' });
-			event.cookies.delete('userid', { path: '/' });
-			throw redirect(303, '/login');
-		}
-
-		event.locals.userId = user.user._id;
-		event.locals.telegramID = user.user.telegramID;
-	} catch (err) {
-		event.cookies.delete('token', { path: '/' });
-		event.cookies.delete('userid', { path: '/' });
-		throw redirect(303, '/login');
-	}
-
-	return resolve(event);
+	return resolve(event, {
+		transformPageChunk: ({ html }) =>
+			html.replace('%unocss-svelte-scoped.global%', 'unocss_svelte_scoped_global_styles')
+	});
 };

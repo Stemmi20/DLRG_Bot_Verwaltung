@@ -1,34 +1,20 @@
+// src/routes/api/logout/+server.ts
 import { json } from '@sveltejs/kit';
-import { collection } from '$lib/server/usedata';
 import type { RequestHandler } from './$types';
+import { sitzungBeenden } from '$lib/server/auth';
 
-export const POST: RequestHandler = async (req) => {
-	const token = req.cookies.get('token');
+export const POST: RequestHandler = async ({ cookies }) => {
+	const sitzungsId = cookies.get('session');
 
-	console.log('=== LOGOUT ===');
-	console.log('Token:', token);
-
-	if (token) {
-		try {
-			const user = await collection.findOne({ 'user.token': token } as any);
-
-			if (user) {
-				await collection.updateOne({ 'user._id': user.user._id } as any, {
-					$unset: { 'user.token': '' },
-				});
-
-				console.log('✅ Token gelöscht für User:', user.user.vorname, user.user.nachname);
-			}
-		} catch (error) {
-			console.error('❌ Fehler beim Löschen des Tokens:', error);
-		}
+	// Wichtig: die Sitzung serverseitig loeschen, nicht nur das Cookie.
+	// Sonst bleibt eine kopierte Cookie-Zeichenkette weiter gueltig.
+	if (sitzungsId) {
+		await sitzungBeenden(sitzungsId);
 	}
 
-	req.cookies.delete('token', { path: '/' });
-	req.cookies.delete('userid', { path: '/' });
-
-	console.log('✅ Logout erfolgreich');
-	console.log('==================\n');
+	cookies.delete('session', { path: '/' });
+	cookies.delete('token', { path: '/' });
+	cookies.delete('userid', { path: '/' });
 
 	return json({ success: true });
 };

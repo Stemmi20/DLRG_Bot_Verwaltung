@@ -1,33 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import Buttons from '$lib/components/Buttons.svelte';
-	import Sidebar from '$lib/components/Sidebar.svelte';
+	import type { Snippet } from 'svelte';
+	import type { LayoutData } from './$types';
 
-	const excludeOn = ['/minecraft'];
-	$: show = !excludeOn.includes($page.url.pathname);
+	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
-	let x = 0;
-	let y = 0;
-	let lastUpdate = Date.now();
+	const OHNE_NAVIGATION = ['/minecraft'];
 
-	$: width = 0;
+	const navZeigen = $derived(!OHNE_NAVIGATION.includes($page.url.pathname));
 </script>
 
-{#if width > 700}
-	<Buttons close={() => {}} />
-{/if}
-{#if width < 700}
-	<Sidebar />
-{/if}
-
-<slot />
-<svelte:window
-	on:mousemove={(e) => {
-		if (lastUpdate + 10 < Date.now()) {
-			lastUpdate = Date.now();
-			x = e.clientX;
-			y = e.clientY;
-		}
-	}}
-	bind:outerWidth={width}
-/>
+{@render children()}
