@@ -9,7 +9,7 @@ import { AUSRUESTUNG, FUNKTIONEN, STAMMDATEN } from '$lib/types/mitglied';
  * locals.userId kann je nach hooks.server.ts eine Mongo-_id (Hex-String)
  * oder die telegramID sein. Beide Faelle werden hier abgedeckt.
  */
-function userQuery(id: string | number | undefined): Filter<Document> {
+function userQuery(id: string | number | null | undefined): Filter<Document> {
 	if (id === undefined || id === null || id === '') {
 		throw error(401, 'Nicht angemeldet');
 	}
