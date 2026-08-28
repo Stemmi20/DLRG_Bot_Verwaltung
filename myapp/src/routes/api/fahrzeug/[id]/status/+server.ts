@@ -38,7 +38,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					zuletztOk: null
 				}
 			},
-			$set: { 'alarmierung.aktiv': true }
 		}
 	);
 

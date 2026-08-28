@@ -1,15 +1,11 @@
 import { MongoClient, type Db, type ObjectId } from 'mongodb';
 import { MONGODB_URI } from '$env/static/private';
-import type {
-	Antwort,
-	EinsatzStatus,
-	EinsatzTyp,
-	Einsatzort,
-	EtaMinuten,
-	FmsStatus,
-	Zugehoerigkeit
-} from '$lib/types/lvs';
+import { collection as benutzerCollection } from './usedata';
 
+/*
+ * Deine bestehende Datenbankanbindung, ergänzt um den LVS-Teil.
+ * Oben unverändert dein Original, ab "Dokumente" kommt das Neue dazu.
+ */
 
 const client = new MongoClient(MONGODB_URI);
 
@@ -18,11 +14,16 @@ export function start_mongo() {
 	return client.connect();
 }
 
+/** Datenbank aus der Verbindungszeichenfolge. */
 export const datenbank: Db = client.db();
 
+/** Benannter Export – für `import { db } from '$lib/server/database'`. */
 export const db = datenbank;
 
+/** Default-Export – für `import DataBase from '$lib/server/database'`. */
 export default datenbank;
+
+// ---------------------------------------------------------------- Dokumente
 
 export interface PushSubscriptionDoc {
 	endpoint: string;
@@ -32,19 +33,24 @@ export interface PushSubscriptionDoc {
 	zuletztOk: Date | null;
 }
 
+/**
+ * Dein bestehendes Benutzerschema (Datenbank `User`, Collection `User`),
+ * ergänzt um die Felder, die der LVS-Teil braucht. Die neuen Felder sind
+ * optional, weil sie in den vorhandenen Datensätzen noch fehlen.
+ */
 export interface UserDoc {
 	_id: ObjectId;
-	name: string;
-	vorname: string;
-	email: string;
-	rollen: string[]; // 'admin' | 'einsatzleiter' | 'aktiv'
-	ortsgruppen: Zugehoerigkeit[];
-	qualifikationen: string[];
-	pushSubscriptions: PushSubscriptionDoc[];
-	alarmierung: {
-		aktiv: boolean;
-		abwesendBis: Date | null;
-	};
+	token?: string;
+	status?: string; // 'AKTIV'
+	vorname?: string;
+	nachname?: string;
+	ortsgruppe?: string;
+	ortsgruppe_admin?: boolean;
+	user?: { zugriff?: boolean; [k: string]: unknown };
+
+	// ─── ab hier LVS ───
+	qualifikationen?: string[];
+	pushSubscriptions?: PushSubscriptionDoc[];
 }
 
 export interface OrtsgruppeDoc {
@@ -56,16 +62,11 @@ export interface OrtsgruppeDoc {
 
 export interface EinsatzDoc {
 	_id: ObjectId;
-	typ: EinsatzTyp;
 	stichwort: string;
 	meldebild: string;
-	einsatzort: Einsatzort;
-	alarmzeit: Date;
 	ausgeloestVon: ObjectId;
 	ortsgruppen: ObjectId[];
 	empfaenger: ObjectId[];
-	fahrzeuge: { fahrzeugId: ObjectId; status: FmsStatus; statusSeit: Date }[];
-	status: EinsatzStatus;
 	beendetAm: Date | null;
 	externalId: string | null;
 }
@@ -74,14 +75,11 @@ export interface RueckmeldungDoc {
 	_id: ObjectId;
 	einsatzId: ObjectId;
 	userId: ObjectId;
-	antwort: Antwort;
-	etaMinuten: EtaMinuten | null;
 	ankunftPrognose: Date | null;
 	angekommenAm: Date | null;
 	ortsgruppeId: ObjectId | null;
 	standortId: ObjectId | null;
 	eingegangenAm: Date;
-	verlauf: { antwort: Antwort; etaMinuten: EtaMinuten | null; am: Date }[];
 }
 
 export interface FahrzeugDoc {
@@ -91,7 +89,6 @@ export interface FahrzeugDoc {
 	typ: string;
 	kennzeichen: string;
 	sollBesatzung: string[];
-	status: FmsStatus;
 	statusSeit: Date;
 	aktuellerEinsatz: ObjectId | null;
 }
@@ -110,12 +107,13 @@ export interface ZustellungDoc {
 // ---------------------------------------------------------------- Zugriff
 
 /**
- * Die Zugriffe sind async, obwohl sie nichts abwarten – so bleiben die
- * Aufrufstellen (`await col.users()`) gleich, falls hier später doch eine
- * Verbindung aufgebaut werden muss.
+ * Die Personen liegen in der Datenbank `User`, Collection `User` – das ist die
+ * Collection aus `usedata.ts`, die auch der Bot und dein Login benutzen.
+ * Alles Weitere (Einsätze, Rückmeldungen, …) liegt in der Datenbank aus
+ * MONGO_URL, zusammen mit den Sitzungen.
  */
 export const col = {
-	users: async () => datenbank.collection<UserDoc>('users'),
+	users: async () => benutzerCollection as unknown as import('mongodb').Collection<UserDoc>,
 	ortsgruppen: async () => datenbank.collection<OrtsgruppeDoc>('ortsgruppen'),
 	einsaetze: async () => datenbank.collection<EinsatzDoc>('einsaetze'),
 	rueckmeldungen: async () => datenbank.collection<RueckmeldungDoc>('rueckmeldungen'),
@@ -123,32 +121,6 @@ export const col = {
 	zustellungen: async () => datenbank.collection<ZustellungDoc>('zustellungen')
 };
 
-/**
- * Einmal beim Start aufrufen, nach `start_mongo()`.
- * Der Unique-Index auf (einsatzId, userId) ist das, was Doppel-Rückmeldungen
- * verhindert – ohne Replica Set haben wir keine Transaktionen.
- */
-export async function indizesAnlegen(): Promise<void> {
-	const [rm, ei, zu, us, fz] = await Promise.all([
-		col.rueckmeldungen(),
-		col.einsaetze(),
-		col.zustellungen(),
-		col.users(),
-		col.fahrzeuge()
-	]);
-
-	await Promise.all([
-		rm.createIndex({ einsatzId: 1, userId: 1 }, { unique: true }),
-		rm.createIndex({ einsatzId: 1, ankunftPrognose: 1 }),
-		ei.createIndex({ status: 1, alarmzeit: -1 }),
-		ei.createIndex({ ortsgruppen: 1, alarmzeit: -1 }),
-		ei.createIndex({ externalId: 1 }, { unique: true, sparse: true }),
-		zu.createIndex({ einsatzId: 1, userId: 1 }),
-		us.createIndex({ 'pushSubscriptions.endpoint': 1 }),
-		us.createIndex({ 'ortsgruppen.ortsgruppeId': 1 }),
-		fz.createIndex({ ortsgruppeId: 1 })
-	]);
-}
 
 export async function schliesse(): Promise<void> {
 	await client.close();

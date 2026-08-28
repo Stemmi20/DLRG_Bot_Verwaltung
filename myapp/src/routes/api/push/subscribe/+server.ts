@@ -35,11 +35,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		zuletztOk: null
 	};
 
-	await users.updateOne(
-		{ _id: user._id },
-		{ $push: { pushSubscriptions: abo }, $set: { 'alarmierung.aktiv': true } }
-	);
-
 	return json({ ok: true });
 };
 

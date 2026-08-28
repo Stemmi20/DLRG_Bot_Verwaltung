@@ -1,26 +1,22 @@
-import { board } from '$lib/server/alarm';
-import { abonniere } from '$lib/server/events';
-import { ladeUser } from '$lib/server/guards';
-import type { EinsatzEvent } from '$lib/types/lvs';
+import { abonniere, alleFahrzeuge, starteMqtt } from '$lib/server/mqtt';
+import type { TrackerEvent } from '$lib/types/tracker';
 import type { RequestHandler } from './$types';
 
 /**
- * Server-Sent Events. Reicht hier völlig: wir senden nur, der Client antwortet
- * über normale POSTs. Überlebt Reverse Proxies besser als WebSockets.
+ * Server-Sent Events für die Fahrzeugkarte.
  *
  * Wichtig für nginx:  proxy_buffering off;  proxy_read_timeout 3600s;
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
-	await ladeUser(locals);
-	const einsatzId = params.id;
+export const GET: RequestHandler = async () => {
+	starteMqtt();
 
 	let abmelden: (() => void) | null = null;
 	let herzschlag: ReturnType<typeof setInterval> | null = null;
 
 	const stream = new ReadableStream({
-		async start(controller) {
+		start(controller) {
 			const enc = new TextEncoder();
-			const sende = (e: EinsatzEvent) => {
+			const sende = (e: TrackerEvent) => {
 				try {
 					controller.enqueue(enc.encode(`data: ${JSON.stringify(e)}\n\n`));
 				} catch {
@@ -30,9 +26,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 			// Retry-Hinweis an den Browser: nach Abbruch in 3 s neu verbinden.
 			controller.enqueue(enc.encode('retry: 3000\n\n'));
-			sende({ art: 'init', board: await board(einsatzId) });
+			sende({ art: 'init', fahrzeuge: alleFahrzeuge() });
 
-			abmelden = abonniere(einsatzId, sende);
+			abmelden = abonniere(sende);
 			herzschlag = setInterval(() => sende({ art: 'ping' }), 25_000);
 		},
 		cancel() {

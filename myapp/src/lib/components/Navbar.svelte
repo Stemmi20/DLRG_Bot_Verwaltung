@@ -15,12 +15,8 @@
 		{ pfad: '/boteinsatzgruppe', label: 'Einsatzgruppe' },
 		{ pfad: '/board', label: 'Board' },
 		{ pfad: '/kfausb', label: 'Kraftfahrer' },
-		{ pfad: '/einstellungen/allamierung', label: 'Alarmierung' }
 	];
 
-	const ADMIN_LINKS = [{ pfad: '/admin/alarm/neu', label: 'Alarm auslösen' }];
-
-	const sichtbareLinks = $derived(user?.istAdmin ? [...LINKS, ...ADMIN_LINKS] : LINKS);
 
 	function istAktiv(pfad: string): boolean {
 		const aktuell = $page.url.pathname;
@@ -100,30 +96,4 @@
 		</div>
 	</div>
 
-	<!-- Navigationslinks: ab lg in der Leiste, darunter aufklappbar -->
-	{#if user}
-		<nav
-			id="hauptmenue"
-			class="border-t border-white/20 {menuOffen ? 'block' : 'hidden'} lg:block"
-			aria-label="Hauptnavigation"
-		>
-			<ul class="mx-auto flex max-w-7xl flex-col px-4 lg:flex-row lg:gap-1">
-				{#each sichtbareLinks as link (link.pfad)}
-					<li>
-						<a
-							href={link.pfad}
-							onclick={() => (menuOffen = false)}
-							aria-current={istAktiv(link.pfad) ? 'page' : undefined}
-							class="block border-b-3 px-3 py-2 transition hover:bg-white/10
-								{istAktiv(link.pfad)
-								? 'border-[rgb(255,237,0)] color-[rgb(255,237,0)]'
-								: 'border-transparent'}"
-						>
-							{link.label}
-						</a>
-					</li>
-				{/each}
-			</ul>
-		</nav>
-	{/if}
 </header>

@@ -1,56 +1,37 @@
-// src/lib/server/guards.ts
 import { error } from '@sveltejs/kit';
 import { ObjectId } from 'mongodb';
-import { collection } from './usedata';
-import type { UserDoc } from './database';
+import { col, type UserDoc } from './database';
 
-
-function normalisiere(doc: Record<string, any>): UserDoc {
-	const rollen: string[] = [];
-
-	if (doc.ortsgruppe_admin === true) rollen.push('admin');
-	if (doc.funktionen?.evd === true || doc.funktionen?.zf === true) {
-		rollen.push('einsatzleiter');
-	}
-	rollen.push('aktiv');
-
-	const qualifikationen = Object.entries(doc.funktionen ?? {})
-		.filter(([, gesetzt]) => gesetzt === true)
-		.map(([kuerzel]) => kuerzel);
-
-	return {
-		_id: doc._id,
-		name: doc.nachname ?? '',
-		vorname: doc.vorname ?? '',
-		email: doc.email ?? '',
-		rollen,
-		// Der Bot speichert die Ortsgruppe als Text, der LVS-Teil erwartet
-		// Zugehoerigkeiten mit ObjectId. Bis zur Migration bleibt das leer.
-		ortsgruppen: doc.ortsgruppen ?? [],
-		qualifikationen,
-		pushSubscriptions: doc.pushSubscriptions ?? [],
-		alarmierung: doc.alarmierung ?? { aktiv: false, abwesendBis: null }
-	};
-}
-
+/**
+ * `locals.user` und `locals.userId` werden in `hooks.server.ts` aus der
+ * geprüften Sitzung gesetzt. Diese Datei ist die einzige Stelle, an der der
+ * LVS-Teil dein Login berührt.
+ */
 export async function ladeUser(locals: App.Locals): Promise<UserDoc> {
 	if (!locals.userId) throw error(401, 'Nicht angemeldet');
 
-	const doc = await collection.findOne({ _id: new ObjectId(locals.userId) });
-	if (!doc) throw error(401, 'Konto nicht gefunden');
+	const users = await col.users();
+	const user = await users.findOne({ _id: new ObjectId(locals.userId) });
+	if (!user) throw error(401, 'Konto nicht gefunden');
+	return user;
+}
 
-	return normalisiere(doc);
+/** Admin ist bei dir, wer `ortsgruppe_admin: true` gesetzt hat. */
+export function istAdmin(user: UserDoc): boolean {
+	return user.ortsgruppe_admin === true;
 }
 
 export async function ladeAdmin(locals: App.Locals): Promise<UserDoc> {
 	const user = await ladeUser(locals);
-
-	if (!user.rollen.includes('admin')) {
-		throw error(403, 'Dafür brauchst du Administratorrechte');
-	}
+	if (!istAdmin(user)) throw error(403, 'Dafür brauchst du Administratorrechte');
 	return user;
 }
 
 export function darfBoardSehen(user: UserDoc): boolean {
-	return user.rollen.some((r) => r === 'admin' || r === 'einsatzleiter');
+	return istAdmin(user);
+}
+
+/** Anzeigename – beide Felder können in Altdatensätzen fehlen. */
+export function anzeigename(user: UserDoc): string {
+	return `${user.vorname ?? ''} ${user.nachname ?? ''}`.trim() || 'Unbekannt';
 }
